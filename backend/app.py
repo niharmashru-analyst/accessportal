@@ -316,12 +316,4 @@ def serve_frontend(path):
     if os.path.isfile(file_path):
         return send_from_directory(FRONTEND_DIR, path)
 
-<<<<<<< HEAD
-ensure_admin()
-print('Database:', DB_PATH)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-=======
     return send_from_directory(FRONTEND_DIR, "index.html")
->>>>>>> 3e2707701809da6f08a8f0229c129ef4d804ed33
