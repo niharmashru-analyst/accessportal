@@ -278,19 +278,15 @@ def audit():
     conn.close()
     return jsonify({"logs": [dict(r) for r in rows]})
 
-@app.route("/", defaults={"path": ""})
+@app.route("/")
+def index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
 @app.route("/<path:path>")
-def frontend(path):
-    if path.startswith("api/"):
-        return jsonify({"error": "Not found"}), 404
-    if FRONTEND_DIR and os.path.exists(os.path.join(FRONTEND_DIR, path)):
+def serve_frontend(path):
+    file_path = os.path.join(FRONTEND_DIR, path)
+
+    if os.path.isfile(file_path):
         return send_from_directory(FRONTEND_DIR, path)
-    index = os.path.join(FRONTEND_DIR, "index.html")
-    if os.path.exists(index):
-        return send_from_directory(FRONTEND_DIR, "index.html")
-    return jsonify({"error": "Frontend build not found"}), 404
 
-init_db()
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    return send_from_directory(FRONTEND_DIR, "index.html")
