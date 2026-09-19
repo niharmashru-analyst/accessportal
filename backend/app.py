@@ -81,18 +81,39 @@ def ensure_admin():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").strip().lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     conn = db()
+
+    # Create the configured admin if it does not exist.
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (admin_email,)).fetchone()
+
     if not existing:
-        conn.execute("""
-            INSERT INTO users
-            (name,email,designation,password_hash,eka_access,mt_access,is_admin,active)
-            VALUES (?,?,?,?,1,1,1,1)
-        """, (
-            "Administrator", admin_email, "Admin",
-            generate_password_hash(admin_password)
-        ))
-        conn.commit()
-        print("Initial admin created:", admin_email)
+        # If this is the first deployment and the default bootstrap admin exists,
+        # migrate that account to the Render ADMIN_EMAIL/ADMIN_PASSWORD once.
+        bootstrap = conn.execute(
+            "SELECT id FROM users WHERE email = 'admin@example.com' AND is_admin = 1"
+        ).fetchone()
+
+        if bootstrap and admin_email != "admin@example.com":
+            conn.execute("""
+                UPDATE users
+                SET email=?, password_hash=?, name='Administrator',
+                    designation='Admin', eka_access=1, mt_access=1,
+                    is_admin=1, active=1, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, (admin_email, generate_password_hash(admin_password), bootstrap["id"]))
+            conn.commit()
+            print("Bootstrap admin migrated to:", admin_email)
+        else:
+            conn.execute("""
+                INSERT INTO users
+                (name,email,designation,password_hash,eka_access,mt_access,is_admin,active)
+                VALUES (?,?,?,?,1,1,1,1)
+            """, (
+                "Administrator", admin_email, "Admin",
+                generate_password_hash(admin_password)
+            ))
+            conn.commit()
+            print("Initial admin created:", admin_email)
+
     conn.close()
 
 def public_user(row):
@@ -305,15 +326,20 @@ def audit():
     conn.close()
     return jsonify({"logs": [dict(r) for r in rows]})
 
-@app.route("/")
-def index():
-    return send_from_directory(FRONTEND_DIR, "index.html")
-
+@app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
-def serve_frontend(path):
-    file_path = os.path.join(FRONTEND_DIR, path)
-
-    if os.path.isfile(file_path):
+def frontend(path):
+    if path.startswith("api/"):
+        return jsonify({"error": "Not found"}), 404
+    if FRONTEND_DIR and os.path.exists(os.path.join(FRONTEND_DIR, path)):
         return send_from_directory(FRONTEND_DIR, path)
+    index = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index):
+        return send_from_directory(FRONTEND_DIR, "index.html")
+    return jsonify({"error": "Frontend build not found"}), 404
 
-    return send_from_directory(FRONTEND_DIR, "index.html")
+ensure_admin()
+print('Database:', DB_PATH)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
