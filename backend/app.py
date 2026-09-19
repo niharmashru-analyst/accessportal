@@ -368,3 +368,10 @@ def serve_frontend(path):
         return send_from_directory(FRONTEND_DIR, path)
 
     return send_from_directory(FRONTEND_DIR, "index.html")
+ensure_admin()
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000))
+    )
