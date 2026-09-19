@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: dashboard-access-portal
+    runtime: python
+    buildCommand: "cd frontend && npm install && npm run build && cd ../backend && pip install -r requirements.txt"
+    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: EKA_URL
+        value: https://eka-ughi.onrender.com
+      - key: MT_URL
+        value: https://mt360db.onrender.com
+      - key: DB_PATH
+        value: /var/data/portal.db
+    disk:
+      name: portal-data
+      mountPath: /var/data
+      sizeGB: 1
