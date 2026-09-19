@@ -56,3 +56,26 @@ Set:
 - SECRET_KEY
 
 The Render persistent disk stores the SQLite database.
+
+
+## IMPORTANT: Render persistent storage
+
+This app uses SQLite. For users to survive redeploys/restarts, the Render Web Service must have a persistent disk mounted at:
+
+`/var/data`
+
+If your existing Render service was created manually, open Render → Service → Disks and add a persistent disk:
+- Name: `portal-data`
+- Mount Path: `/var/data`
+- Size: 1 GB
+
+If your Render plan does not support persistent disks, the app will still run using its fallback database, but users/passwords can be lost after a restart/redeploy. For a real production user database, use a persistent disk or an external PostgreSQL database later.
+
+## Required environment variables
+
+`ADMIN_EMAIL` = your admin email  
+`ADMIN_PASSWORD` = your admin password  
+`SECRET_KEY` = Render-generated secret  
+`EKA_URL` = https://eka-ughi.onrender.com  
+`MT_URL` = https://mt360db.onrender.com  
+`DB_PATH` = /var/data/portal.db

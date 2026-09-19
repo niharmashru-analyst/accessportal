@@ -6,7 +6,34 @@ from flask import Flask, request, jsonify, session, redirect, send_from_director
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "portal.db"))
+DEFAULT_DATA_DIR = "/var/data"
+
+def choose_db_path():
+    configured = os.environ.get("DB_PATH", "").strip()
+    if configured:
+        parent = os.path.dirname(configured)
+        if parent:
+            try:
+                os.makedirs(parent, exist_ok=True)
+                test = os.path.join(parent, ".write_test")
+                with open(test, "w") as f:
+                    f.write("ok")
+                os.remove(test)
+                return configured
+            except Exception:
+                pass
+
+    try:
+        os.makedirs(DEFAULT_DATA_DIR, exist_ok=True)
+        test = os.path.join(DEFAULT_DATA_DIR, ".write_test")
+        with open(test, "w") as f:
+            f.write("ok")
+        os.remove(test)
+        return os.path.join(DEFAULT_DATA_DIR, "portal.db")
+    except Exception:
+        return os.path.join(BASE_DIR, "portal.db")
+
+DB_PATH = choose_db_path()
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
 
 EKA_URL = os.environ.get("EKA_URL", "https://eka-ughi.onrender.com")
@@ -22,10 +49,7 @@ app.config["SESSION_COOKIE_SECURE"] = True
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = db()
+    # Self-heal if the database was empty/new or an old database is being used.
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,9 +75,12 @@ def init_db():
         )
     """)
     conn.commit()
+    return conn
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+def ensure_admin():
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").strip().lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
+    conn = db()
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (admin_email,)).fetchone()
     if not existing:
         conn.execute("""
@@ -290,7 +317,8 @@ def frontend(path):
         return send_from_directory(FRONTEND_DIR, "index.html")
     return jsonify({"error": "Frontend build not found"}), 404
 
-init_db()
+ensure_admin()
+print('Database:', DB_PATH)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
