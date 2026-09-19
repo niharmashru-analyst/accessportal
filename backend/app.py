@@ -80,39 +80,69 @@ def db():
 def ensure_admin():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").strip().lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
+
     conn = db()
 
-    # Create the configured admin if it does not exist.
-    existing = conn.execute("SELECT id FROM users WHERE email = ?", (admin_email,)).fetchone()
+    existing = conn.execute(
+        "SELECT id FROM users WHERE email = ?",
+        (admin_email,)
+    ).fetchone()
 
-    if not existing:
-        # If this is the first deployment and the default bootstrap admin exists,
-        # migrate that account to the Render ADMIN_EMAIL/ADMIN_PASSWORD once.
+    if existing:
+        conn.execute("""
+            UPDATE users
+            SET password_hash=?,
+                is_admin=1,
+                active=1,
+                eka_access=1,
+                mt_access=1,
+                designation='Admin',
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+        """, (
+            generate_password_hash(admin_password),
+            existing["id"]
+        ))
+
+        conn.commit()
+        print("Admin credentials synced:", admin_email)
+
+    else:
         bootstrap = conn.execute(
-            "SELECT id FROM users WHERE email = 'admin@example.com' AND is_admin = 1"
+            "SELECT id FROM users WHERE email='admin@example.com' AND is_admin=1"
         ).fetchone()
 
-        if bootstrap and admin_email != "admin@example.com":
+        if bootstrap:
             conn.execute("""
                 UPDATE users
-                SET email=?, password_hash=?, name='Administrator',
-                    designation='Admin', eka_access=1, mt_access=1,
-                    is_admin=1, active=1, updated_at=CURRENT_TIMESTAMP
+                SET email=?,
+                    password_hash=?,
+                    is_admin=1,
+                    active=1,
+                    eka_access=1,
+                    mt_access=1,
+                    designation='Admin',
+                    updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
-            """, (admin_email, generate_password_hash(admin_password), bootstrap["id"]))
-            conn.commit()
-            print("Bootstrap admin migrated to:", admin_email)
+            """, (
+                admin_email,
+                generate_password_hash(admin_password),
+                bootstrap["id"]
+            ))
         else:
             conn.execute("""
                 INSERT INTO users
-                (name,email,designation,password_hash,eka_access,mt_access,is_admin,active)
+                (name,email,designation,password_hash,
+                 eka_access,mt_access,is_admin,active)
                 VALUES (?,?,?,?,1,1,1,1)
             """, (
-                "Administrator", admin_email, "Admin",
+                "Administrator",
+                admin_email,
+                "Admin",
                 generate_password_hash(admin_password)
             ))
-            conn.commit()
-            print("Initial admin created:", admin_email)
+
+        conn.commit()
 
     conn.close()
 
